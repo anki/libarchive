@@ -66,6 +66,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <time.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -84,12 +85,14 @@
 /* Windows (including Visual Studio and MinGW but not Cygwin) */
 #if defined(_WIN32) && !defined(__CYGWIN__)
 #if !defined(__BORLANDC__)
+#undef chdir
+#define chdir _chdir
 #define strdup _strdup
 #endif
 #endif
 
 /* Visual Studio */
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && _MSC_VER < 1900
 #define snprintf	sprintf_s
 #endif
 
@@ -118,6 +121,32 @@
 #endif
 
 /*
+ * If this platform has <sys/acl.h>, acl_create(), acl_init(),
+ * acl_set_file(), and ACL_USER, we assume it has the rest of the
+ * POSIX.1e draft functions used in archive_read_extract.c.
+ */
+#if HAVE_SYS_ACL_H && HAVE_ACL_CREATE_ENTRY && HAVE_ACL_INIT && HAVE_ACL_SET_FILE
+#if HAVE_ACL_USER
+#define	HAVE_POSIX_ACL	1
+#elif HAVE_ACL_TYPE_EXTENDED
+#define	HAVE_DARWIN_ACL	1
+#endif
+#endif
+
+/*
+ * If this platform has <sys/acl.h>, acl_get(), facl_get(), acl_set(),
+ * facl_set() and types aclent_t and ace_t it uses Solaris-style ACL functions
+ */
+#if HAVE_SYS_ACL_H && HAVE_ACL_GET && HAVE_FACL_GET && HAVE_ACL_SET && HAVE_FACL_SET && HAVE_ACLENT_T && HAVE_ACE_T
+#define	HAVE_SUN_ACL	1
+#endif
+
+/* Define if platform supports NFSv4 ACLs */
+#if (HAVE_POSIX_ACL && HAVE_ACL_TYPE_NFS4) || HAVE_SUN_ACL || HAVE_DARWIN_ACL
+#define	HAVE_NFS4_ACL	1
+#endif
+
+/*
  * Redefine DEFINE_TEST for use in defining the test functions.
  */
 #undef DEFINE_TEST
@@ -142,6 +171,9 @@
 /* As above, but raw blocks of bytes. */
 #define assertEqualMem(v1, v2, l)	\
   assertion_equal_mem(__FILE__, __LINE__, (v1), #v1, (v2), #v2, (l), #l, NULL)
+/* Assert that memory is full of a specified byte */
+#define assertMemoryFilledWith(v1, l, b)					\
+  assertion_memory_filled_with(__FILE__, __LINE__, (v1), #v1, (l), #l, (b), #b, NULL)
 /* Assert two files are the same. */
 #define assertEqualFile(f1, f2)	\
   assertion_equal_file(__FILE__, __LINE__, (f1), (f2))
@@ -168,6 +200,9 @@
 /* Assert that file contents match a string. */
 #define assertFileContents(data, data_size, pathname) \
   assertion_file_contents(__FILE__, __LINE__, data, data_size, pathname)
+/* Verify that a file does not contain invalid strings */
+#define assertFileContainsNoInvalidStrings(pathname, strings) \
+  assertion_file_contains_no_invalid_strings(__FILE__, __LINE__, pathname, strings)
 #define assertFileMtime(pathname, sec, nsec)	\
   assertion_file_mtime(__FILE__, __LINE__, pathname, sec, nsec)
 #define assertFileMtimeRecent(pathname) \
@@ -176,6 +211,8 @@
   assertion_file_nlinks(__FILE__, __LINE__, pathname, nlinks)
 #define assertFileSize(pathname, size)  \
   assertion_file_size(__FILE__, __LINE__, pathname, size)
+#define assertFileMode(pathname, mode)  \
+  assertion_file_mode(__FILE__, __LINE__, pathname, mode)
 #define assertTextFileContents(text, pathname) \
   assertion_text_file_contents(__FILE__, __LINE__, text, pathname)
 #define assertFileContainsLinesAnyOrder(pathname, lines)	\
@@ -201,7 +238,7 @@
   assertion_make_hardlink(__FILE__, __LINE__, newfile, oldfile)
 #define assertMakeSymlink(newfile, linkto)	\
   assertion_make_symlink(__FILE__, __LINE__, newfile, linkto)
-#define assertNodump(path)	\
+#define assertNodump(path)      \
   assertion_nodump(__FILE__, __LINE__, path)
 #define assertUmask(mask)	\
   assertion_umask(__FILE__, __LINE__, mask)
@@ -225,6 +262,7 @@ int assertion_empty_file(const char *, int, const char *);
 int assertion_equal_file(const char *, int, const char *, const char *);
 int assertion_equal_int(const char *, int, long long, const char *, long long, const char *, void *);
 int assertion_equal_mem(const char *, int, const void *, const char *, const void *, const char *, size_t, const char *, void *);
+int assertion_memory_filled_with(const char *, int, const void *, const char *, size_t, const char *, char, const char *, void *);
 int assertion_equal_string(const char *, int, const char *v1, const char *, const char *v2, const char *, void *, int);
 int assertion_equal_wstring(const char *, int, const wchar_t *v1, const char *, const wchar_t *v2, const char *, void *);
 int assertion_file_atime(const char *, int, const char *, long, long);
@@ -232,8 +270,10 @@ int assertion_file_atime_recent(const char *, int, const char *);
 int assertion_file_birthtime(const char *, int, const char *, long, long);
 int assertion_file_birthtime_recent(const char *, int, const char *);
 int assertion_file_contains_lines_any_order(const char *, int, const char *, const char **);
+int assertion_file_contains_no_invalid_strings(const char *, int, const char *, const char **);
 int assertion_file_contents(const char *, int, const void *, int, const char *);
 int assertion_file_exists(const char *, int, const char *);
+int assertion_file_mode(const char *, int, const char *, int);
 int assertion_file_mtime(const char *, int, const char *, long, long);
 int assertion_file_mtime_recent(const char *, int, const char *);
 int assertion_file_nlinks(const char *, int, const char *, int);
@@ -281,6 +321,9 @@ int canRunCommand(const char *);
 /* Return true if this platform can run the "lrzip" program. */
 int canLrzip(void);
 
+/* Return true if this platform can run the "lz4" program. */
+int canLz4(void);
+
 /* Return true if this platform can run the "lzip" program. */
 int canLzip(void);
 
@@ -308,11 +351,16 @@ void dumpfile(const char *filename, void *, size_t);
 
 /* Extracts named reference file to the current directory. */
 void extract_reference_file(const char *);
+/* Copies named reference file to the current directory. */
+void copy_reference_file(const char *);
 
 /* Extracts a list of files to the current directory.
  * List must be NULL terminated.
  */
 void extract_reference_files(const char **);
+
+/* Subtract umask from mode */
+mode_t umasked(mode_t expected_mode);
 
 /* Path to working directory for current test */
 extern const char *testworkdir;
@@ -324,12 +372,29 @@ extern const char *testworkdir;
 #include "archive.h"
 #include "archive_entry.h"
 
+/* ACL structure */
+struct archive_test_acl_t {
+	int type;  /* Type of ACL */
+	int permset; /* Permissions for this class of users. */
+	int tag; /* Owner, User, Owning group, group, other, etc. */
+	int qual; /* GID or UID of user/group, depending on tag. */
+	const char *name; /* Name of user/group, depending on tag. */
+};
+
+/* Set ACLs */
+void archive_test_set_acls(struct archive_entry *, struct archive_test_acl_t *,
+    int);
+
+/* Compare ACLs */
+void archive_test_compare_acls(struct archive_entry *,
+    struct archive_test_acl_t *, int, int, int);
+
 /* Special customized read-from-memory interface. */
-int read_open_memory(struct archive *, void *, size_t, size_t);
+int read_open_memory(struct archive *, const void *, size_t, size_t);
 /* _minimal version exercises a slightly different set of libarchive APIs. */
-int read_open_memory_minimal(struct archive *, void *, size_t, size_t);
+int read_open_memory_minimal(struct archive *, const void *, size_t, size_t);
 /* _seek version produces a seekable file. */
-int read_open_memory_seek(struct archive *, void *, size_t, size_t);
+int read_open_memory_seek(struct archive *, const void *, size_t, size_t);
 
 /* Versions of above that accept an archive argument for additional info. */
 #define assertA(e)   assertion_assert(__FILE__, __LINE__, (e), #e, (a))

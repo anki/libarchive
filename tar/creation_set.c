@@ -75,6 +75,7 @@ get_filter_code(const char *suffix)
 		{ ".grz",	"grzip" },
 		{ ".lrz",	"lrzip" },
 		{ ".lz",	"lzip" },
+		{ ".lz4",	"lz4" },
 		{ ".lzo",	"lzop" },
 		{ ".lzma",	"lzma" },
 		{ ".uu",	"uuencode" },
@@ -97,6 +98,7 @@ get_format_code(const char *suffix)
 		{ ".mtree",	"mtree" },
 		{ ".shar",	"shar" },
 		{ ".tar",	"paxr" },
+		{ ".warc",	"warc" },
 		{ ".xar",	"xar" },
 		{ ".zip",	"zip" },
 		{ NULL,		NULL }
@@ -293,7 +295,7 @@ cset_auto_compress(struct creation_set *cset, const char *filename)
 		struct filter_set *v;
 		int i, r;
 
-		/* Release previos filters. */
+		/* Release previous filters. */
 		_cleanup_filters(old_filters, old_filter_count);
 
 		v = malloc(sizeof(*v) * cset->filter_count);
@@ -306,7 +308,7 @@ cset_auto_compress(struct creation_set *cset, const char *filename)
 		cset->filters = v;
 		return (1);
 	} else {
-		/* Put previos filters back. */
+		/* Put previous filters back. */
 		cset->filters = old_filters;
 		cset->filter_count = old_filter_count;
 		return (0);

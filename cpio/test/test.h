@@ -85,12 +85,14 @@
 /* Windows (including Visual Studio and MinGW but not Cygwin) */
 #if defined(_WIN32) && !defined(__CYGWIN__)
 #if !defined(__BORLANDC__)
+#undef chdir
+#define chdir _chdir
 #define strdup _strdup
 #endif
 #endif
 
 /* Visual Studio */
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && _MSC_VER < 1900
 #define snprintf	sprintf_s
 #endif
 
@@ -143,6 +145,9 @@
 /* As above, but raw blocks of bytes. */
 #define assertEqualMem(v1, v2, l)	\
   assertion_equal_mem(__FILE__, __LINE__, (v1), #v1, (v2), #v2, (l), #l, NULL)
+/* Assert that memory is full of a specified byte */
+#define assertMemoryFilledWith(v1, l, b)					\
+  assertion_memory_filled_with(__FILE__, __LINE__, (v1), #v1, (l), #l, (b), #b, NULL)
 /* Assert two files are the same. */
 #define assertEqualFile(f1, f2)	\
   assertion_equal_file(__FILE__, __LINE__, (f1), (f2))
@@ -169,6 +174,9 @@
 /* Assert that file contents match a string. */
 #define assertFileContents(data, data_size, pathname) \
   assertion_file_contents(__FILE__, __LINE__, data, data_size, pathname)
+/* Verify that a file does not contain invalid strings */
+#define assertFileContainsNoInvalidStrings(pathname, strings) \
+  assertion_file_contains_no_invalid_strings(__FILE__, __LINE__, pathname, strings)
 #define assertFileMtime(pathname, sec, nsec)	\
   assertion_file_mtime(__FILE__, __LINE__, pathname, sec, nsec)
 #define assertFileMtimeRecent(pathname) \
@@ -177,6 +185,8 @@
   assertion_file_nlinks(__FILE__, __LINE__, pathname, nlinks)
 #define assertFileSize(pathname, size)  \
   assertion_file_size(__FILE__, __LINE__, pathname, size)
+#define assertFileMode(pathname, mode)  \
+  assertion_file_mode(__FILE__, __LINE__, pathname, mode)
 #define assertTextFileContents(text, pathname) \
   assertion_text_file_contents(__FILE__, __LINE__, text, pathname)
 #define assertFileContainsLinesAnyOrder(pathname, lines)	\
@@ -226,6 +236,7 @@ int assertion_empty_file(const char *, int, const char *);
 int assertion_equal_file(const char *, int, const char *, const char *);
 int assertion_equal_int(const char *, int, long long, const char *, long long, const char *, void *);
 int assertion_equal_mem(const char *, int, const void *, const char *, const void *, const char *, size_t, const char *, void *);
+int assertion_memory_filled_with(const char *, int, const void *, const char *, size_t, const char *, char, const char *, void *);
 int assertion_equal_string(const char *, int, const char *v1, const char *, const char *v2, const char *, void *, int);
 int assertion_equal_wstring(const char *, int, const wchar_t *v1, const char *, const wchar_t *v2, const char *, void *);
 int assertion_file_atime(const char *, int, const char *, long, long);
@@ -233,8 +244,10 @@ int assertion_file_atime_recent(const char *, int, const char *);
 int assertion_file_birthtime(const char *, int, const char *, long, long);
 int assertion_file_birthtime_recent(const char *, int, const char *);
 int assertion_file_contains_lines_any_order(const char *, int, const char *, const char **);
+int assertion_file_contains_no_invalid_strings(const char *, int, const char *, const char **);
 int assertion_file_contents(const char *, int, const void *, int, const char *);
 int assertion_file_exists(const char *, int, const char *);
+int assertion_file_mode(const char *, int, const char *, int);
 int assertion_file_mtime(const char *, int, const char *, long, long);
 int assertion_file_mtime_recent(const char *, int, const char *);
 int assertion_file_nlinks(const char *, int, const char *, int);
@@ -276,8 +289,14 @@ int canGrzip(void);
 /* Return true if this platform can run the "gzip" program. */
 int canGzip(void);
 
+/* Return true if this platform can run the specified command. */
+int canRunCommand(const char *);
+
 /* Return true if this platform can run the "lrzip" program. */
 int canLrzip(void);
+
+/* Return true if this platform can run the "lz4" program. */
+int canLz4(void);
 
 /* Return true if this platform can run the "lzip" program. */
 int canLzip(void);
@@ -301,8 +320,21 @@ int is_LargeInode(const char *);
 /* Supports printf-style args: slurpfile(NULL, "%s/myfile", refdir); */
 char *slurpfile(size_t *, const char *fmt, ...);
 
+/* Dump block of bytes to a file. */
+void dumpfile(const char *filename, void *, size_t);
+
 /* Extracts named reference file to the current directory. */
 void extract_reference_file(const char *);
+/* Copies named reference file to the current directory. */
+void copy_reference_file(const char *);
+
+/* Extracts a list of files to the current directory.
+ * List must be NULL terminated.
+ */
+void extract_reference_files(const char **);
+
+/* Subtract umask from mode */
+mode_t umasked(mode_t expected_mode);
 
 /* Path to working directory for current test */
 extern const char *testworkdir;

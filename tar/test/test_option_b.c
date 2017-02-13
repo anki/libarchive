@@ -29,15 +29,16 @@ __FBSDID("$FreeBSD$");
 
 DEFINE_TEST(test_option_b)
 {
-	char *testprog_ustar = malloc(strlen(testprog) + sizeof(USTAR_OPT) + 1);
-	strcpy(testprog_ustar, testprog);
-	strcat(testprog_ustar, USTAR_OPT);
+	char *testprog_ustar;
 
 	assertMakeFile("file1", 0644, "file1");
 	if (systemf("cat file1 > test_cat.out 2> test_cat.err") != 0) {
-		skipping("Platform doesn't have cat");
+		skipping("This test requires a `cat` program");
 		return;
 	}
+	testprog_ustar = malloc(strlen(testprog) + sizeof(USTAR_OPT) + 1);
+	strcpy(testprog_ustar, testprog);
+	strcat(testprog_ustar, USTAR_OPT);
 
 	/*
 	 * Bsdtar does not pad if the output is going directly to a disk file.
@@ -77,4 +78,6 @@ DEFINE_TEST(test_option_b)
 	 * Note: It's not possible to verify at this level that blocks
 	 * are getting written with the
 	 */
+
+	free(testprog_ustar);
 }

@@ -18,8 +18,10 @@ SET(libarchive_SOURCES
   archive_cmdline.c
   archive_cmdline_private.h
   archive_crc32.h
-  archive_crypto.c
-  archive_crypto_private.h
+  archive_cryptor.c
+  archive_cryptor_private.h
+  archive_digest.c
+  archive_digest_private.h
   archive_endian.h
   archive_entry.c
   archive_entry.h
@@ -32,7 +34,12 @@ SET(libarchive_SOURCES
   archive_entry_strmode.c
   archive_entry_xattr.c
   archive_getdate.c
+  archive_getdate.h
+  archive_hmac.c
+  archive_hmac_private.h
   archive_match.c
+  archive_openssl_evp_private.h
+  archive_openssl_hmac_private.h
   archive_options.c
   archive_options_private.h
   archive_pack_dev.h
@@ -44,9 +51,12 @@ SET(libarchive_SOURCES
   archive_ppmd7.c
   archive_ppmd7_private.h
   archive_private.h
+  archive_random.c
+  archive_random_private.h
   archive_rb.c
   archive_rb.h
   archive_read.c
+  archive_read_add_passphrase.c
   archive_read_append_filter.c
   archive_read_data_into_fd.c
   archive_read_disk_entry_from_file.c
@@ -54,6 +64,7 @@ SET(libarchive_SOURCES
   archive_read_disk_private.h
   archive_read_disk_set_standard_lookup.c
   archive_read_extract.c
+  archive_read_extract2.c
   archive_read_open_fd.c
   archive_read_open_file.c
   archive_read_open_filename.c
@@ -67,6 +78,7 @@ SET(libarchive_SOURCES
   archive_read_support_filter_gzip.c
   archive_read_support_filter_grzip.c
   archive_read_support_filter_lrzip.c
+  archive_read_support_filter_lz4.c
   archive_read_support_filter_lzop.c
   archive_read_support_filter_none.c
   archive_read_support_filter_program.c
@@ -86,6 +98,7 @@ SET(libarchive_SOURCES
   archive_read_support_format_rar.c
   archive_read_support_format_raw.c
   archive_read_support_format_tar.c
+  archive_read_support_format_warc.c
   archive_read_support_format_xar.c
   archive_read_support_format_zip.c
   archive_string.c
@@ -112,6 +125,7 @@ SET(libarchive_SOURCES
   archive_write_add_filter_grzip.c
   archive_write_add_filter_gzip.c
   archive_write_add_filter_lrzip.c
+  archive_write_add_filter_lz4.c
   archive_write_add_filter_lzop.c
   archive_write_add_filter_none.c
   archive_write_add_filter_program.c
@@ -123,6 +137,7 @@ SET(libarchive_SOURCES
   archive_write_set_format_by_name.c
   archive_write_set_format_cpio.c
   archive_write_set_format_cpio_newc.c
+  archive_write_set_format_filter_by_ext.c
   archive_write_set_format_gnutar.c
   archive_write_set_format_iso9660.c
   archive_write_set_format_mtree.c
@@ -131,11 +146,15 @@ SET(libarchive_SOURCES
   archive_write_set_format_shar.c
   archive_write_set_format_ustar.c
   archive_write_set_format_v7tar.c
+  archive_write_set_format_warc.c
   archive_write_set_format_xar.c
   archive_write_set_format_zip.c
   archive_write_set_options.c
+  archive_write_set_passphrase.c
+  archive_xxhash.h
   filter_fork_posix.c
   filter_fork.h
+  xxhash.c
 )
 
 # Man pages
@@ -148,14 +167,34 @@ SET(libarchive_MANS
   archive_entry_stat.3
   archive_entry_time.3
   archive_read.3
+  archive_read_add_passphrase.3
+  archive_read_data.3
   archive_read_disk.3
+  archive_read_extract.3
+  archive_read_filter.3
+  archive_read_format.3
+  archive_read_free.3
+  archive_read_header.3
+  archive_read_new.3
+  archive_read_open.3
   archive_read_set_options.3
   archive_util.3
   archive_write.3
+  archive_write_blocksize.3
+  archive_write_data.3
   archive_write_disk.3
+  archive_write_filter.3
+  archive_write_finish_entry.3
+  archive_write_format.3
+  archive_write_free.3
+  archive_write_header.3
+  archive_write_new.3
+  archive_write_open.3
   archive_write_set_options.3
+  archive_write_set_passphrase.3
   cpio.5
   libarchive.3
+  libarchive_changes.3
   libarchive_internals.3
   libarchive-formats.5
   mtree.5
@@ -178,6 +217,7 @@ SET_TARGET_PROPERTIES(archive PROPERTIES SOVERSION ${SOVERSION})
 
 # archive_static is a static library
 ADD_LIBRARY(archive_static STATIC ${libarchive_SOURCES} ${include_HEADERS})
+TARGET_LINK_LIBRARIES(archive_static ${ADDITIONAL_LIBS})
 SET_TARGET_PROPERTIES(archive_static PROPERTIES COMPILE_DEFINITIONS
   LIBARCHIVE_STATIC)
 # On Posix systems, libarchive.so and libarchive.a can co-exist.
@@ -185,12 +225,14 @@ IF(NOT WIN32 OR CYGWIN)
   SET_TARGET_PROPERTIES(archive_static PROPERTIES OUTPUT_NAME archive)
 ENDIF(NOT WIN32 OR CYGWIN)
 
-# How to install the libraries
-INSTALL(TARGETS archive archive_static
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib)
-INSTALL_MAN(${libarchive_MANS})
-INSTALL(FILES ${include_HEADERS} DESTINATION include)
+IF(ENABLE_INSTALL)
+  # How to install the libraries
+  INSTALL(TARGETS archive archive_static
+          RUNTIME DESTINATION bin
+          LIBRARY DESTINATION lib
+          ARCHIVE DESTINATION lib)
+  INSTALL_MAN(${libarchive_MANS})
+  INSTALL(FILES ${include_HEADERS} DESTINATION include)
+ENDIF()
 
 add_subdirectory(test)

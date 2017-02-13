@@ -25,24 +25,36 @@
 #include "test.h"
 __FBSDID("$FreeBSD");
 
+#if defined(_WIN32) && !defined(__CYGWIN__)
+#define	close		_close
+#define	open		_open
+#endif
+
 /*
  * Extract a non-encoded file.
  * The header of the 7z archive files is not encoded.
  */
 static void
-test_copy()
+test_copy(int use_open_fd)
 {
 	const char *refname = "test_read_format_7zip_copy.7z";
 	struct archive_entry *ae;
 	struct archive *a;
 	char buff[128];
+	int fd = -1;
 
 	extract_reference_file(refname);
 	assert((a = archive_read_new()) != NULL);
 	assertEqualIntA(a, ARCHIVE_OK, archive_read_support_filter_all(a));
 	assertEqualIntA(a, ARCHIVE_OK, archive_read_support_format_all(a));
-	assertEqualIntA(a, ARCHIVE_OK,
-	    archive_read_open_filename(a, refname, 10240));
+	if (use_open_fd) {
+		fd = open(refname, O_RDONLY | O_BINARY); 
+		assertEqualIntA(a, ARCHIVE_OK,
+		    archive_read_open_fd(a, fd, 10240));
+	} else {
+		assertEqualIntA(a, ARCHIVE_OK,
+		    archive_read_open_filename(a, refname, 10240));
+	}
 
 	/* Verify regular file1. */
 	assertEqualIntA(a, ARCHIVE_OK, archive_read_next_header(a, &ae));
@@ -67,6 +79,8 @@ test_copy()
 	/* Close the archive. */
 	assertEqualInt(ARCHIVE_OK, archive_read_close(a));
 	assertEqualInt(ARCHIVE_OK, archive_read_free(a));
+	if (fd != -1)
+		close(fd);
 }
 
 /*
@@ -674,7 +688,7 @@ test_symname()
 	assertEqualInt(32, archive_read_data(a, buff, sizeof(buff)));
 	assertEqualMem(buff, "hellohellohello\nhellohellohello\n", 32);
 
-	/* Verify symbolic-linke symlinkfile. */
+	/* Verify symbolic-link symlinkfile. */
 	assertEqualIntA(a, ARCHIVE_OK, archive_read_next_header(a, &ae));
 	assertEqualInt((AE_IFLNK | 0755), archive_entry_mode(ae));
 	assertEqualString("symlinkfile", archive_entry_pathname(ae));
@@ -735,9 +749,14 @@ DEFINE_TEST(test_read_format_7zip_bzip2)
 	assertEqualInt(ARCHIVE_OK, archive_read_free(a));
 }
 
+DEFINE_TEST(test_read_format_7zip_from_fd)
+{
+	test_copy(1);/* read a 7zip file from a file descriptor. */
+}
+
 DEFINE_TEST(test_read_format_7zip_copy)
 {
-	test_copy();
+	test_copy(0);
 	test_bcj("test_read_format_7zip_bcj_copy.7z");
 	test_bcj("test_read_format_7zip_bcj2_copy_1.7z");
 	test_bcj("test_read_format_7zip_bcj2_copy_2.7z");

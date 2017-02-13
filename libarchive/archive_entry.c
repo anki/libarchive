@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2003-2007 Tim Kientzle
+ * Copyright (c) 2016 Martin Matuska
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -248,10 +249,9 @@ archive_entry_new2(struct archive *a)
 {
 	struct archive_entry *entry;
 
-	entry = (struct archive_entry *)malloc(sizeof(*entry));
+	entry = (struct archive_entry *)calloc(1, sizeof(*entry));
 	if (entry == NULL)
 		return (NULL);
-	memset(entry, 0, sizeof(*entry));
 	entry->archive = a;
 	return (entry);
 }
@@ -418,6 +418,18 @@ archive_entry_gname(struct archive_entry *entry)
 	return (NULL);
 }
 
+const char *
+archive_entry_gname_utf8(struct archive_entry *entry)
+{
+	const char *p;
+	if (archive_mstring_get_utf8(entry->archive, &entry->ae_gname, &p) == 0)
+		return (p);
+	if (errno == ENOMEM)
+		__archive_errx(1, "No memory");
+	return (NULL);
+}
+
+
 const wchar_t *
 archive_entry_gname_w(struct archive_entry *entry)
 {
@@ -443,6 +455,20 @@ archive_entry_hardlink(struct archive_entry *entry)
 	if ((entry->ae_set & AE_SET_HARDLINK) == 0)
 		return (NULL);
 	if (archive_mstring_get_mbs(
+	    entry->archive, &entry->ae_hardlink, &p) == 0)
+		return (p);
+	if (errno == ENOMEM)
+		__archive_errx(1, "No memory");
+	return (NULL);
+}
+
+const char *
+archive_entry_hardlink_utf8(struct archive_entry *entry)
+{
+	const char *p;
+	if ((entry->ae_set & AE_SET_HARDLINK) == 0)
+		return (NULL);
+	if (archive_mstring_get_utf8(
 	    entry->archive, &entry->ae_hardlink, &p) == 0)
 		return (p);
 	if (errno == ENOMEM)
@@ -529,6 +555,18 @@ archive_entry_pathname(struct archive_entry *entry)
 {
 	const char *p;
 	if (archive_mstring_get_mbs(
+	    entry->archive, &entry->ae_pathname, &p) == 0)
+		return (p);
+	if (errno == ENOMEM)
+		__archive_errx(1, "No memory");
+	return (NULL);
+}
+
+const char *
+archive_entry_pathname_utf8(struct archive_entry *entry)
+{
+	const char *p;
+	if (archive_mstring_get_utf8(
 	    entry->archive, &entry->ae_pathname, &p) == 0)
 		return (p);
 	if (errno == ENOMEM)
@@ -637,6 +675,20 @@ archive_entry_symlink(struct archive_entry *entry)
 	return (NULL);
 }
 
+const char *
+archive_entry_symlink_utf8(struct archive_entry *entry)
+{
+	const char *p;
+	if ((entry->ae_set & AE_SET_SYMLINK) == 0)
+		return (NULL);
+	if (archive_mstring_get_utf8(
+	    entry->archive, &entry->ae_symlink, &p) == 0)
+		return (p);
+	if (errno == ENOMEM)
+		__archive_errx(1, "No memory");
+	return (NULL);
+}
+
 const wchar_t *
 archive_entry_symlink_w(struct archive_entry *entry)
 {
@@ -674,6 +726,17 @@ archive_entry_uname(struct archive_entry *entry)
 {
 	const char *p;
 	if (archive_mstring_get_mbs(entry->archive, &entry->ae_uname, &p) == 0)
+		return (p);
+	if (errno == ENOMEM)
+		__archive_errx(1, "No memory");
+	return (NULL);
+}
+
+const char *
+archive_entry_uname_utf8(struct archive_entry *entry)
+{
+	const char *p;
+	if (archive_mstring_get_utf8(entry->archive, &entry->ae_uname, &p) == 0)
 		return (p);
 	if (errno == ENOMEM)
 		__archive_errx(1, "No memory");
@@ -769,6 +832,12 @@ archive_entry_set_gname(struct archive_entry *entry, const char *name)
 }
 
 void
+archive_entry_set_gname_utf8(struct archive_entry *entry, const char *name)
+{
+	archive_mstring_copy_utf8(&entry->ae_gname, name);
+}
+
+void
 archive_entry_copy_gname(struct archive_entry *entry, const char *name)
 {
 	archive_mstring_copy_mbs(&entry->ae_gname, name);
@@ -818,6 +887,16 @@ void
 archive_entry_set_hardlink(struct archive_entry *entry, const char *target)
 {
 	archive_mstring_copy_mbs(&entry->ae_hardlink, target);
+	if (target != NULL)
+		entry->ae_set |= AE_SET_HARDLINK;
+	else
+		entry->ae_set &= ~AE_SET_HARDLINK;
+}
+
+void
+archive_entry_set_hardlink_utf8(struct archive_entry *entry, const char *target)
+{
+	archive_mstring_copy_utf8(&entry->ae_hardlink, target);
 	if (target != NULL)
 		entry->ae_set |= AE_SET_HARDLINK;
 	else
@@ -962,6 +1041,15 @@ archive_entry_set_link(struct archive_entry *entry, const char *target)
 		archive_mstring_copy_mbs(&entry->ae_hardlink, target);
 }
 
+void
+archive_entry_set_link_utf8(struct archive_entry *entry, const char *target)
+{
+	if (entry->ae_set & AE_SET_SYMLINK)
+		archive_mstring_copy_utf8(&entry->ae_symlink, target);
+	else
+		archive_mstring_copy_utf8(&entry->ae_hardlink, target);
+}
+
 /* Set symlink if symlink is already set, else set hardlink. */
 void
 archive_entry_copy_link(struct archive_entry *entry, const char *target)
@@ -1049,6 +1137,12 @@ void
 archive_entry_set_pathname(struct archive_entry *entry, const char *name)
 {
 	archive_mstring_copy_mbs(&entry->ae_pathname, name);
+}
+
+void
+archive_entry_set_pathname_utf8(struct archive_entry *entry, const char *name)
+{
+	archive_mstring_copy_utf8(&entry->ae_pathname, name);
 }
 
 void
@@ -1152,6 +1246,16 @@ archive_entry_set_symlink(struct archive_entry *entry, const char *linkname)
 }
 
 void
+archive_entry_set_symlink_utf8(struct archive_entry *entry, const char *linkname)
+{
+	archive_mstring_copy_utf8(&entry->ae_symlink, linkname);
+	if (linkname != NULL)
+		entry->ae_set |= AE_SET_SYMLINK;
+	else
+		entry->ae_set &= ~AE_SET_SYMLINK;
+}
+
+void
 archive_entry_copy_symlink(struct archive_entry *entry, const char *linkname)
 {
 	archive_mstring_copy_mbs(&entry->ae_symlink, linkname);
@@ -1212,6 +1316,12 @@ void
 archive_entry_set_uname(struct archive_entry *entry, const char *name)
 {
 	archive_mstring_copy_mbs(&entry->ae_uname, name);
+}
+
+void
+archive_entry_set_uname_utf8(struct archive_entry *entry, const char *name)
+{
+	archive_mstring_copy_utf8(&entry->ae_uname, name);
 }
 
 void
@@ -1332,6 +1442,15 @@ archive_entry_acl_add_entry_w(struct archive_entry *entry,
 }
 
 /*
+ * Return a bitmask of ACL types in an archive entry ACL list
+ */
+int
+archive_entry_acl_types(struct archive_entry *entry)
+{
+	return (archive_acl_types(&entry->acl));
+}
+
+/*
  * Return a count of entries matching "want_type".
  */
 int
@@ -1368,34 +1487,121 @@ archive_entry_acl_next(struct archive_entry *entry, int want_type, int *type,
 }
 
 /*
- * Generate a text version of the ACL.  The flags parameter controls
+ * Generate a text version of the ACL. The flags parameter controls
  * the style of the generated ACL.
  */
+wchar_t *
+archive_entry_acl_to_text_w(struct archive_entry *entry, ssize_t *len,
+    int flags)
+{
+	return (archive_acl_to_text_w(&entry->acl, len, flags,
+	    entry->archive));
+}
+
+char *
+archive_entry_acl_to_text(struct archive_entry *entry, ssize_t *len,
+    int flags)
+{
+	return (archive_acl_to_text_l(&entry->acl, len, flags, NULL));
+}
+
+char *
+_archive_entry_acl_to_text_l(struct archive_entry *entry, ssize_t *len,
+   int flags, struct archive_string_conv *sc)
+{
+	return (archive_acl_to_text_l(&entry->acl, len, flags, sc));
+}
+
+/*
+ * ACL text parser.
+ */
+int
+archive_entry_acl_from_text_w(struct archive_entry *entry,
+    const wchar_t *wtext, int type)
+{
+	return (archive_acl_from_text_w(&entry->acl, wtext, type));
+}
+
+int
+archive_entry_acl_from_text(struct archive_entry *entry,
+    const char *text, int type)
+{
+	return (archive_acl_from_text_l(&entry->acl, text, type, NULL));
+}
+
+int
+_archive_entry_acl_from_text_l(struct archive_entry *entry, const char *text,
+    int type, struct archive_string_conv *sc)
+{
+	return (archive_acl_from_text_l(&entry->acl, text, type, sc));
+}
+
+/* Deprecated */
+static int
+archive_entry_acl_text_compat(int *flags)
+{
+	if ((*flags & ARCHIVE_ENTRY_ACL_TYPE_POSIX1E) == 0)
+		return (1);
+
+	/* ABI compat with old ARCHIVE_ENTRY_ACL_STYLE_EXTRA_ID */
+	if ((*flags & OLD_ARCHIVE_ENTRY_ACL_STYLE_EXTRA_ID) != 0)
+		*flags |= ARCHIVE_ENTRY_ACL_STYLE_EXTRA_ID;
+
+	/* ABI compat with old ARCHIVE_ENTRY_ACL_STYLE_MARK_DEFAULT */
+	if ((*flags & OLD_ARCHIVE_ENTRY_ACL_STYLE_MARK_DEFAULT) != 0)
+		*flags |=  ARCHIVE_ENTRY_ACL_STYLE_MARK_DEFAULT;
+
+	*flags |= ARCHIVE_ENTRY_ACL_STYLE_SEPARATOR_COMMA;
+
+	return (0);
+}
+
+/* Deprecated */
 const wchar_t *
 archive_entry_acl_text_w(struct archive_entry *entry, int flags)
 {
-	const wchar_t *r;
-	r = archive_acl_text_w(entry->archive, &entry->acl, flags);
-	if (r == NULL && errno == ENOMEM)
-		__archive_errx(1, "No memory");
-	return (r);
+	if (entry->acl.acl_text_w != NULL) {
+		free(entry->acl.acl_text_w);
+		entry->acl.acl_text_w = NULL;
+	}
+	if (archive_entry_acl_text_compat(&flags) == 0)
+		entry->acl.acl_text_w = archive_acl_to_text_w(&entry->acl,
+		    NULL, flags, entry->archive);
+	return (entry->acl.acl_text_w);
 }
 
+/* Deprecated */
 const char *
 archive_entry_acl_text(struct archive_entry *entry, int flags)
 {
-	const char *p;
-	if (archive_acl_text_l(&entry->acl, flags, &p, NULL, NULL) != 0
-	    && errno == ENOMEM)
-		__archive_errx(1, "No memory");
-	return (p);
+	if (entry->acl.acl_text != NULL) {
+		free(entry->acl.acl_text);
+		entry->acl.acl_text = NULL;
+	}
+	if (archive_entry_acl_text_compat(&flags) == 0)
+		entry->acl.acl_text = archive_acl_to_text_l(&entry->acl, NULL,
+		    flags, NULL);
+
+	return (entry->acl.acl_text);
 }
 
+/* Deprecated */
 int
 _archive_entry_acl_text_l(struct archive_entry *entry, int flags,
     const char **acl_text, size_t *len, struct archive_string_conv *sc)
 {
-	return (archive_acl_text_l(&entry->acl, flags, acl_text, len, sc));
+	if (entry->acl.acl_text != NULL) {
+		free(entry->acl.acl_text);
+		entry->acl.acl_text = NULL;
+        }
+
+	if (archive_entry_acl_text_compat(&flags) == 0)
+		entry->acl.acl_text = archive_acl_to_text_l(&entry->acl,
+		    (ssize_t *)len, flags, sc);
+
+	*acl_text = entry->acl.acl_text;
+
+	return (0);
 }
 
 /*
@@ -1629,19 +1835,23 @@ ae_strtofflags(const char *s, unsigned long *setp, unsigned long *clrp)
 	while (*start == '\t'  ||  *start == ' '  ||  *start == ',')
 		start++;
 	while (*start != '\0') {
+		size_t length;
 		/* Locate end of token. */
 		end = start;
 		while (*end != '\0'  &&  *end != '\t'  &&
 		    *end != ' '  &&  *end != ',')
 			end++;
+		length = end - start;
 		for (flag = flags; flag->name != NULL; flag++) {
-			if (memcmp(start, flag->name, end - start) == 0) {
+			size_t flag_length = strlen(flag->name);
+			if (length == flag_length
+			    && memcmp(start, flag->name, length) == 0) {
 				/* Matched "noXXXX", so reverse the sense. */
 				clear |= flag->set;
 				set |= flag->clear;
 				break;
-			} else if (memcmp(start, flag->name + 2, end - start)
-			    == 0) {
+			} else if (length == flag_length - 2
+			    && memcmp(start, flag->name + 2, length) == 0) {
 				/* Matched "XXXX", so don't reverse. */
 				set |= flag->set;
 				clear |= flag->clear;
@@ -1693,19 +1903,23 @@ ae_wcstofflags(const wchar_t *s, unsigned long *setp, unsigned long *clrp)
 	while (*start == L'\t'  ||  *start == L' '  ||  *start == L',')
 		start++;
 	while (*start != L'\0') {
+		size_t length;
 		/* Locate end of token. */
 		end = start;
 		while (*end != L'\0'  &&  *end != L'\t'  &&
 		    *end != L' '  &&  *end != L',')
 			end++;
+		length = end - start;
 		for (flag = flags; flag->wname != NULL; flag++) {
-			if (wmemcmp(start, flag->wname, end - start) == 0) {
+			size_t flag_length = wcslen(flag->wname);
+			if (length == flag_length
+			    && wmemcmp(start, flag->wname, length) == 0) {
 				/* Matched "noXXXX", so reverse the sense. */
 				clear |= flag->set;
 				set |= flag->clear;
 				break;
-			} else if (wmemcmp(start, flag->wname + 2, end - start)
-			    == 0) {
+			} else if (length == flag_length - 2
+			    && wmemcmp(start, flag->wname + 2, length) == 0) {
 				/* Matched "XXXX", so don't reverse. */
 				set |= flag->set;
 				clear |= flag->clear;
